@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Edit, arrange, and combine images into a PDF directly in your browser."
+  />
+  <title>Image to PDF Studio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <h1>Image to PDF Studio</h1>
+      <p>Arrange, enhance, and combine images into one PDF.</p>
+    </div>
+    <span class="privacy-badge">Processed locally</span>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel upload-panel">
+      <div
+        id="dropZone"
+        class="drop-zone"
+        tabindex="0"
+        role="button"
+        aria-label="Upload images"
+      >
+        <input
+          id="fileInput"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/bmp,image/gif"
+          multiple
+          hidden
+        />
+        <div class="drop-icon" aria-hidden="true">＋</div>
+        <h2>Drop images here</h2>
+        <p>or click to browse</p>
+        <small>JPEG, PNG, WebP, BMP, and GIF</small>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <section class="panel pages-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Pages</h2>
+            <p>Drag cards to change the PDF order.</p>
+          </div>
+          <div class="heading-actions">
+            <button id="addMoreButton" class="button secondary" type="button">
+              Add images
+            </button>
+            <button id="clearButton" class="button danger-text" type="button">
+              Clear all
+            </button>
+          </div>
+        </div>
+
+        <div id="imageGrid" class="image-grid" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel settings-panel">
+        <h2>PDF settings</h2>
+
+        <label class="field">
+          <span>File name</span>
+          <input id="fileName" type="text" value="images.pdf" />
+        </label>
+
+        <label class="field">
+          <span>Page size</span>
+          <select id="pageSize">
+            <option value="a4">A4</option>
+            <option value="letter">US Letter</option>
+            <option value="fit">Fit each image</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Page orientation</span>
+          <select id="orientation">
+            <option value="auto">Automatic</option>
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Margin</span>
+          <select id="margin">
+            <option value="0">None</option>
+            <option value="18">Small</option>
+            <option value="36" selected>Medium</option>
+            <option value="54">Large</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Image quality <output id="qualityOutput">90%</output></span>
+          <input id="quality" type="range" min="50" max="100" value="90" />
+        </label>
+
+        <label class="check-field">
+          <input id="whiteBackground" type="checkbox" checked />
+          <span>Use white page background</span>
+        </label>
+
+        <button id="createPdfButton" class="button primary full-width" type="button">
+          Create PDF
+        </button>
+
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+
+        <p class="privacy-note">
+          Your files stay on your device. No image is sent to a server.
+        </p>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="editorDialog" class="editor-dialog">
+    <form method="dialog" class="editor-window">
+      <div class="editor-header">
+        <div>
+          <h2>Edit image</h2>
+          <p id="editorFileName"></p>
+        </div>
+        <button
+          id="closeEditorButton"
+          class="icon-button"
+          type="button"
+          aria-label="Close editor"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="editor-layout">
+        <div class="preview-area">
+          <canvas id="editorCanvas"></canvas>
+        </div>
+
+        <div class="editor-controls">
+          <div class="control-group">
+            <span class="control-label">Rotation</span>
+            <div class="button-row">
+              <button id="rotateLeftButton" class="button secondary" type="button">
+                ↶ Left
+              </button>
+              <button id="rotateRightButton" class="button secondary" type="button">
+                ↷ Right
+              </button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Brightness <output id="brightnessOutput">100%</output></span>
+            <input id="brightness" type="range" min="50" max="160" value="100" />
+          </label>
+
+          <label class="field">
+            <span>Contrast <output id="contrastOutput">100%</output></span>
+            <input id="contrast" type="range" min="50" max="250" value="100" />
+          </label>
+
+          <label class="check-field">
+            <input id="grayscale" type="checkbox" />
+            <span>Grayscale</span>
+          </label>
+
+          <label class="check-field">
+            <input id="blackWhite" type="checkbox" />
+            <span>High-contrast black and white</span>
+          </label>
+
+          <label id="thresholdField" class="field hidden">
+            <span>Black/white threshold <output id="thresholdOutput">160</output></span>
+            <input id="threshold" type="range" min="40" max="230" value="160" />
+          </label>
+
+          <div class="editor-actions">
+            <button id="resetButton" class="button secondary" type="button">
+              Reset
+            </button>
+            <button id="cancelEditButton" class="button secondary" type="button">
+              Cancel
+            </button>
+            <button id="applyEditButton" class="button primary" type="button">
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="imageCardTemplate">
+    <article class="image-card" draggable="true">
+      <div class="image-number"></div>
+      <div class="thumbnail-wrap">
+        <canvas class="thumbnail"></canvas>
+      </div>
+      <div class="card-info">
+        <strong class="card-name"></strong>
+        <span class="card-dimensions"></span>
+      </div>
+      <div class="card-actions">
+        <button class="button compact edit-button" type="button">Edit</button>
+        <button class="button compact remove-button danger-text" type="button">
+          Remove
+        </button>
+      </div>
+      <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
+    </article>
+  </template>
+
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

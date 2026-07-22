@@ -13,7 +13,9 @@ A browser-based image editor and PDF creator designed for static hosting on GitH
 - Export all images into one PDF
 - A4, US Letter, or image-fitted pages
 - Automatic, portrait, or landscape orientation
-- Adjustable page margins and JPEG quality
+- Compression presets, maximum image resolution, and adjustable JPEG quality
+- Pre-conversion output-size estimate and final PDF size display
+- Adjustable page margins
 - Entirely client-side: images are not uploaded to a server
 
 ## Run locally

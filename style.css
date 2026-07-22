@@ -577,3 +577,13 @@ button {
     grid-column: 1 / -1;
   }
 }
+
+.size-estimate {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f3f5f8;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+}

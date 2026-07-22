@@ -15,8 +15,12 @@
     pageSize: document.querySelector("#pageSize"),
     orientation: document.querySelector("#orientation"),
     margin: document.querySelector("#margin"),
+    compressionPreset: document.querySelector("#compressionPreset"),
+    maxDimension: document.querySelector("#maxDimension"),
     quality: document.querySelector("#quality"),
     qualityOutput: document.querySelector("#qualityOutput"),
+    estimateSizeButton: document.querySelector("#estimateSizeButton"),
+    sizeEstimate: document.querySelector("#sizeEstimate"),
     whiteBackground: document.querySelector("#whiteBackground"),
     status: document.querySelector("#status"),
     cardTemplate: document.querySelector("#imageCardTemplate"),
@@ -60,6 +64,72 @@
     a4: [595.28, 841.89],
     letter: [612, 792],
   };
+
+  const COMPRESSION_PRESETS = {
+    small: { maxDimension: 1200, quality: 60 },
+    balanced: { maxDimension: 1800, quality: 75 },
+    high: { maxDimension: 2400, quality: 85 },
+    original: { maxDimension: 0, quality: 90 },
+  };
+
+
+  function getCompressionSettings() {
+    return {
+      maxDimension: Number(elements.maxDimension.value),
+      quality: Number(elements.quality.value) / 100,
+    };
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(0)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function applyCompressionPreset() {
+    const preset = COMPRESSION_PRESETS[elements.compressionPreset.value];
+    elements.maxDimension.value = String(preset.maxDimension);
+    elements.quality.value = String(preset.quality);
+    elements.qualityOutput.value = `${preset.quality}%`;
+    elements.sizeEstimate.textContent = "Estimated size: —";
+  }
+
+  async function estimatePdfSize() {
+    if (!state.images.length) {
+      setStatus("Add at least one image first.", "error");
+      return;
+    }
+
+    elements.estimateSizeButton.disabled = true;
+    const { maxDimension, quality } = getCompressionSettings();
+    let totalBytes = 0;
+
+    try {
+      for (let index = 0; index < state.images.length; index += 1) {
+        elements.sizeEstimate.textContent = `Estimating ${index + 1} of ${state.images.length}…`;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const imageItem = state.images[index];
+        const canvas = renderEditedImageToCanvas(imageItem, imageItem.edit, {
+          maxWidth: maxDimension || null,
+          maxHeight: maxDimension || null,
+          maxPixels: maxDimension ? maxDimension * maxDimension : 18_000_000,
+          whiteBackground: elements.whiteBackground.checked,
+        });
+        const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+        totalBytes += blob.size;
+      }
+
+      // Add a small allowance for PDF page objects and metadata.
+      totalBytes += state.images.length * 2500 + 5000;
+      elements.sizeEstimate.textContent = `Estimated size: about ${formatBytes(totalBytes)}`;
+    } catch (error) {
+      console.error(error);
+      elements.sizeEstimate.textContent = "Estimated size: unavailable";
+    } finally {
+      elements.estimateSizeButton.disabled = false;
+    }
+  }
 
   function uniqueId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -534,7 +604,7 @@
 
     try {
       const pdfDocument = await PDFDocument.create();
-      const quality = Number(elements.quality.value) / 100;
+      const { maxDimension, quality } = getCompressionSettings();
       const margin = Number(elements.margin.value);
       const shouldUseWhiteBackground = elements.whiteBackground.checked;
 
@@ -549,7 +619,9 @@
         await new Promise((resolve) => requestAnimationFrame(resolve));
 
         const canvas = renderEditedImageToCanvas(imageItem, imageItem.edit, {
-          maxPixels: 18_000_000,
+          maxWidth: maxDimension || null,
+          maxHeight: maxDimension || null,
+          maxPixels: maxDimension ? maxDimension * maxDimension : 18_000_000,
           whiteBackground: shouldUseWhiteBackground,
         });
 
@@ -605,7 +677,7 @@
       link.remove();
 
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 20_000);
-      setStatus("PDF created successfully.", "success");
+      setStatus(`PDF created successfully — ${formatBytes(pdfBytes.length)}.`, "success");
     } catch (error) {
       console.error(error);
       setStatus(error.message || "Could not create the PDF.", "error");
@@ -656,9 +728,16 @@
   elements.clearButton.addEventListener("click", clearAll);
   elements.createPdfButton.addEventListener("click", createPdf);
 
+  elements.compressionPreset.addEventListener("change", applyCompressionPreset);
+  elements.maxDimension.addEventListener("change", () => {
+    elements.compressionPreset.selectedIndex = -1;
+    elements.sizeEstimate.textContent = "Estimated size: —";
+  });
   elements.quality.addEventListener("input", () => {
     elements.qualityOutput.value = `${elements.quality.value}%`;
+    elements.sizeEstimate.textContent = "Estimated size: —";
   });
+  elements.estimateSizeButton.addEventListener("click", estimatePdfSize);
 
   elements.closeEditorButton.addEventListener("click", closeEditor);
   elements.cancelEditButton.addEventListener("click", closeEditor);

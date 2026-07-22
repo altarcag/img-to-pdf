@@ -99,9 +99,34 @@
         </label>
 
         <label class="field">
-          <span>Image quality <output id="qualityOutput">90%</output></span>
-          <input id="quality" type="range" min="50" max="100" value="90" />
+          <span>Compression preset</span>
+          <select id="compressionPreset">
+            <option value="small">Small (email)</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="high">High quality</option>
+            <option value="original">Original resolution</option>
+          </select>
         </label>
+
+        <label class="field">
+          <span>Maximum image dimension</span>
+          <select id="maxDimension">
+            <option value="1200">1200 px</option>
+            <option value="1800" selected>1800 px</option>
+            <option value="2400">2400 px</option>
+            <option value="0">Original</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Image quality <output id="qualityOutput">75%</output></span>
+          <input id="quality" type="range" min="40" max="100" value="75" />
+        </label>
+
+        <button id="estimateSizeButton" class="button secondary full-width" type="button">
+          Estimate PDF size
+        </button>
+        <div id="sizeEstimate" class="size-estimate">Estimated size: —</div>
 
         <label class="check-field">
           <input id="whiteBackground" type="checkbox" checked />

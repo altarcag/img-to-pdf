@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     name="description"
-    content="Edit, arrange, and combine images into a PDF directly in your browser."
+    content="Edit images and merge PDFs into one document directly in your browser."
   />
-  <title>Image to PDF Studio</title>
+  <title>PDF Merge Studio</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="site-header">
     <div>
-      <h1>Image to PDF Studio</h1>
-      <p>Arrange, enhance, and combine images into one PDF.</p>
+      <h1>PDF Merge Studio</h1>
+      <p>Arrange PDFs and edited images into one document.</p>
     </div>
     <span class="privacy-badge">Processed locally</span>
   </header>
@@ -26,19 +26,19 @@
         class="drop-zone"
         tabindex="0"
         role="button"
-        aria-label="Upload images"
+        aria-label="Upload PDF and image files"
       >
         <input
           id="fileInput"
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/bmp,image/gif"
+          accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/bmp,image/gif"
           multiple
           hidden
         />
         <div class="drop-icon" aria-hidden="true">＋</div>
-        <h2>Drop images here</h2>
+        <h2>Drop PDFs or images here</h2>
         <p>or click to browse</p>
-        <small>JPEG, PNG, WebP, BMP, and GIF</small>
+        <small>PDF, JPEG, PNG, WebP, BMP, and GIF</small>
       </div>
     </section>
 
@@ -51,7 +51,7 @@
           </div>
           <div class="heading-actions">
             <button id="addMoreButton" class="button secondary" type="button">
-              Add images
+              Add files
             </button>
             <button id="clearButton" class="button danger-text" type="button">
               Clear all
@@ -63,12 +63,16 @@
       </section>
 
       <aside class="panel settings-panel">
-        <h2>PDF settings</h2>
+        <h2>Output settings</h2>
 
         <label class="field">
           <span>File name</span>
-          <input id="fileName" type="text" value="images.pdf" />
+          <input id="fileName" type="text" value="merged.pdf" />
         </label>
+
+        <p class="settings-note">
+          The settings below apply to image pages only. Existing PDF pages are copied unchanged.
+        </p>
 
         <label class="field">
           <span>Page size</span>
@@ -140,7 +144,7 @@
         <div id="status" class="status" role="status" aria-live="polite"></div>
 
         <p class="privacy-note">
-          Your files stay on your device. No image is sent to a server.
+          Your files stay on your device. Nothing is sent to a server.
         </p>
       </aside>
     </section>
@@ -233,7 +237,7 @@
         <span class="card-dimensions"></span>
       </div>
       <div class="card-actions">
-        <button class="button compact edit-button" type="button">Edit</button>
+        <button class="button compact edit-button" type="button">Edit image</button>
         <button class="button compact remove-button danger-text" type="button">
           Remove
         </button>

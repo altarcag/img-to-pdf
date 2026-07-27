@@ -45,7 +45,7 @@
   };
 
   const state = {
-    images: [],
+    items: [],
     editingId: null,
     temporaryEdit: null,
     dragId: null,
@@ -72,6 +72,13 @@
     original: { maxDimension: 0, quality: 90 },
   };
 
+  const SUPPORTED_IMAGE_TYPES = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/gif",
+  ]);
 
   function getCompressionSettings() {
     return {
@@ -96,8 +103,8 @@
   }
 
   async function estimatePdfSize() {
-    if (!state.images.length) {
-      setStatus("Add at least one image first.", "error");
+    if (!state.items.length) {
+      setStatus("Add at least one PDF or image first.", "error");
       return;
     }
 
@@ -106,10 +113,20 @@
     let totalBytes = 0;
 
     try {
-      for (let index = 0; index < state.images.length; index += 1) {
-        elements.sizeEstimate.textContent = `Estimating ${index + 1} of ${state.images.length}…`;
+      let outputPageCount = 0;
+
+      for (let index = 0; index < state.items.length; index += 1) {
+        elements.sizeEstimate.textContent = `Estimating ${index + 1} of ${state.items.length}…`;
         await new Promise((resolve) => requestAnimationFrame(resolve));
-        const imageItem = state.images[index];
+        const item = state.items[index];
+
+        if (item.type === "pdf") {
+          totalBytes += item.file.size;
+          outputPageCount += item.pageCount;
+          continue;
+        }
+
+        const imageItem = item;
         const canvas = renderEditedImageToCanvas(imageItem, imageItem.edit, {
           maxWidth: maxDimension || null,
           maxHeight: maxDimension || null,
@@ -118,10 +135,11 @@
         });
         const blob = await canvasToBlob(canvas, "image/jpeg", quality);
         totalBytes += blob.size;
+        outputPageCount += 1;
       }
 
       // Add a small allowance for PDF page objects and metadata.
-      totalBytes += state.images.length * 2500 + 5000;
+      totalBytes += outputPageCount * 2500 + 5000;
       elements.sizeEstimate.textContent = `Estimated size: about ${formatBytes(totalBytes)}`;
     } catch (error) {
       console.error(error);
@@ -141,12 +159,23 @@
   }
 
   function normalizePdfFileName(value) {
-    const clean = value.trim() || "images.pdf";
+    const clean = value.trim() || "merged.pdf";
     return clean.toLowerCase().endsWith(".pdf") ? clean : `${clean}.pdf`;
   }
 
   function isSupportedImage(file) {
-    return file.type.startsWith("image/");
+    return (
+      SUPPORTED_IMAGE_TYPES.has(file.type.toLowerCase()) ||
+      /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name)
+    );
+  }
+
+  function isPdfFile(file) {
+    return file.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(file.name);
+  }
+
+  function isSupportedFile(file) {
+    return isPdfFile(file) || isSupportedImage(file);
   }
 
   function loadImageFromFile(file) {
@@ -169,24 +198,47 @@
   }
 
   async function addFiles(fileList) {
-    const files = Array.from(fileList).filter(isSupportedImage);
+    const selectedFiles = Array.from(fileList);
+    const files = selectedFiles.filter(isSupportedFile);
 
     if (!files.length) {
-      setStatus("Please choose supported image files.", "error");
+      setStatus("Please choose supported PDF or image files.", "error");
       return;
     }
 
-    setStatus(`Loading ${files.length} image${files.length === 1 ? "" : "s"}…`);
+    setStatus(`Loading ${files.length} file${files.length === 1 ? "" : "s"}…`);
     elements.addMoreButton.disabled = true;
 
-    const failures = [];
+    const failures = selectedFiles
+      .filter((file) => !isSupportedFile(file))
+      .map((file) => file.name);
 
     for (const file of files) {
       try {
+        if (isPdfFile(file)) {
+          const pdfBytes = new Uint8Array(await file.arrayBuffer());
+          const pdf = await PDFDocument.load(pdfBytes, { updateMetadata: false });
+          const pageCount = pdf.getPageCount();
+
+          if (!pageCount) {
+            throw new Error(`${file.name} does not contain any pages.`);
+          }
+
+          state.items.push({
+            id: uniqueId(),
+            type: "pdf",
+            file,
+            pdfBytes,
+            pageCount,
+          });
+          continue;
+        }
+
         const image = await loadImageFromFile(file);
 
-        state.images.push({
+        state.items.push({
           id: uniqueId(),
+          type: "image",
           file,
           image,
           width: image.naturalWidth,
@@ -206,7 +258,7 @@
     if (failures.length) {
       setStatus(`Could not load: ${failures.join(", ")}`, "error");
     } else {
-      setStatus(`${files.length} image${files.length === 1 ? "" : "s"} added.`, "success");
+      setStatus(`${files.length} file${files.length === 1 ? "" : "s"} added.`, "success");
     }
   }
 
@@ -343,12 +395,33 @@
     context.drawImage(rendered, 0, 0);
   }
 
+  function drawPdfThumbnail(canvas, pageCount) {
+    canvas.classList.add("pdf-thumbnail");
+    canvas.width = 180;
+    canvas.height = 148;
+    const context = canvas.getContext("2d");
+
+    context.fillStyle = "#f8fafc";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#d92d20";
+    context.fillRect(45, 24, 90, 72);
+    context.fillStyle = "#ffffff";
+    context.font = "700 28px system-ui, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("PDF", 90, 60);
+    context.fillStyle = "#475467";
+    context.font = "600 18px system-ui, sans-serif";
+    context.fillText(`${pageCount} page${pageCount === 1 ? "" : "s"}`, 90, 119);
+  }
+
   function renderImageList() {
     elements.imageGrid.innerHTML = "";
-    elements.workspace.classList.toggle("hidden", state.images.length === 0);
-    elements.dropZone.closest(".upload-panel").classList.toggle("hidden", state.images.length > 0);
+    elements.sizeEstimate.textContent = "Estimated size: —";
+    elements.workspace.classList.toggle("hidden", state.items.length === 0);
+    elements.dropZone.closest(".upload-panel").classList.toggle("hidden", state.items.length > 0);
 
-    state.images.forEach((imageItem, index) => {
+    state.items.forEach((item, index) => {
       const fragment = elements.cardTemplate.content.cloneNode(true);
       const card = fragment.querySelector(".image-card");
       const number = fragment.querySelector(".image-number");
@@ -358,17 +431,23 @@
       const editButton = fragment.querySelector(".edit-button");
       const removeButton = fragment.querySelector(".remove-button");
 
-      card.dataset.id = imageItem.id;
+      card.dataset.id = item.id;
       number.textContent = index + 1;
-      name.textContent = imageItem.file.name;
-      name.title = imageItem.file.name;
+      name.textContent = item.file.name;
+      name.title = item.file.name;
 
-      const rotated = getRotatedDimensions(imageItem);
-      dimensions.textContent = `${rotated.width} × ${rotated.height}px`;
-      drawThumbnail(thumbnail, imageItem);
+      if (item.type === "pdf") {
+        dimensions.textContent = `${item.pageCount} PDF page${item.pageCount === 1 ? "" : "s"} · original quality`;
+        editButton.remove();
+        drawPdfThumbnail(thumbnail, item.pageCount);
+      } else {
+        const rotated = getRotatedDimensions(item);
+        dimensions.textContent = `${rotated.width} × ${rotated.height}px · image`;
+        drawThumbnail(thumbnail, item);
+        editButton.addEventListener("click", () => openEditor(item.id));
+      }
 
-      editButton.addEventListener("click", () => openEditor(imageItem.id));
-      removeButton.addEventListener("click", () => removeImage(imageItem.id));
+      removeButton.addEventListener("click", () => removeImage(item.id));
 
       card.addEventListener("dragstart", handleDragStart);
       card.addEventListener("dragover", handleDragOver);
@@ -381,13 +460,13 @@
   }
 
   function removeImage(id) {
-    state.images = state.images.filter((image) => image.id !== id);
+    state.items = state.items.filter((item) => item.id !== id);
     renderImageList();
-    setStatus(state.images.length ? "Image removed." : "");
+    setStatus(state.items.length ? "File removed." : "");
   }
 
   function clearAll() {
-    state.images = [];
+    state.items = [];
     renderImageList();
     setStatus("");
   }
@@ -423,17 +502,17 @@
       return;
     }
 
-    const sourceIndex = state.images.findIndex((image) => image.id === sourceId);
-    const targetIndex = state.images.findIndex((image) => image.id === targetId);
+    const sourceIndex = state.items.findIndex((item) => item.id === sourceId);
+    const targetIndex = state.items.findIndex((item) => item.id === targetId);
 
     if (sourceIndex === -1 || targetIndex === -1) {
       return;
     }
 
-    const [moved] = state.images.splice(sourceIndex, 1);
-    state.images.splice(targetIndex, 0, moved);
+    const [moved] = state.items.splice(sourceIndex, 1);
+    state.items.splice(targetIndex, 0, moved);
     renderImageList();
-    setStatus("Page order updated.", "success");
+    setStatus("File order updated.", "success");
   }
 
   function handleDragEnd() {
@@ -444,7 +523,7 @@
   }
 
   function openEditor(id) {
-    const imageItem = state.images.find((image) => image.id === id);
+    const imageItem = state.items.find((item) => item.id === id && item.type === "image");
 
     if (!imageItem) {
       return;
@@ -497,7 +576,9 @@
   }
 
   function renderEditorPreview() {
-    const imageItem = state.images.find((image) => image.id === state.editingId);
+    const imageItem = state.items.find(
+      (item) => item.id === state.editingId && item.type === "image",
+    );
 
     if (!imageItem || !state.temporaryEdit) {
       return;
@@ -529,7 +610,9 @@
   }
 
   function applyEditorChanges() {
-    const imageItem = state.images.find((image) => image.id === state.editingId);
+    const imageItem = state.items.find(
+      (item) => item.id === state.editingId && item.type === "image",
+    );
 
     if (!imageItem || !state.temporaryEdit) {
       return;
@@ -593,8 +676,8 @@
   }
 
   async function createPdf() {
-    if (!state.images.length) {
-      setStatus("Add at least one image first.", "error");
+    if (!state.items.length) {
+      setStatus("Add at least one PDF or image first.", "error");
       return;
     }
 
@@ -608,17 +691,29 @@
       const margin = Number(elements.margin.value);
       const shouldUseWhiteBackground = elements.whiteBackground.checked;
 
-      pdfDocument.setCreator("Image to PDF Studio");
+      pdfDocument.setCreator("PDF Merge Studio");
       pdfDocument.setProducer("pdf-lib");
       pdfDocument.setCreationDate(new Date());
 
-      for (let index = 0; index < state.images.length; index += 1) {
-        const imageItem = state.images[index];
-        setStatus(`Processing page ${index + 1} of ${state.images.length}…`);
+      for (let index = 0; index < state.items.length; index += 1) {
+        const item = state.items[index];
+        setStatus(`Processing file ${index + 1} of ${state.items.length}…`);
 
         await new Promise((resolve) => requestAnimationFrame(resolve));
 
-        const canvas = renderEditedImageToCanvas(imageItem, imageItem.edit, {
+        if (item.type === "pdf") {
+          const sourcePdf = await PDFDocument.load(item.pdfBytes, {
+            updateMetadata: false,
+          });
+          const sourcePages = await pdfDocument.copyPages(
+            sourcePdf,
+            sourcePdf.getPageIndices(),
+          );
+          sourcePages.forEach((page) => pdfDocument.addPage(page));
+          continue;
+        }
+
+        const canvas = renderEditedImageToCanvas(item, item.edit, {
           maxWidth: maxDimension || null,
           maxHeight: maxDimension || null,
           maxPixels: maxDimension ? maxDimension * maxDimension : 18_000_000,
